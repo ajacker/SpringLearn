@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd">
+    <!--构造函数注入-->
+    <bean id="accountService1" class="com.ajacker.com.ajacker.service.impl.AccountServiceImpl1">
+
+        <constructor-arg name="name" value="test"/>
+        <constructor-arg name="age" value="18"/>
+        <constructor-arg name="birthday" ref="now"/>
+    </bean>
+
+    <!--配置一个日期对象-->
+    <bean id="now" class="java.util.Date"/>
+
+    <!--set方法注入-->
+    <bean id="accountService2" class="com.ajacker.com.ajacker.service.impl.AccountServiceImpl2">
+        <!--这里的name属性是setXXX的XXX，不一定非得是属性名-->
+        <property name="userName" value="test"/>
+        <property name="age" value="19"/>
+        <property name="birthday" ref="now"/>
+    </bean>
+
+    <!--集合类型的注入-->
+    <bean id="accountService3" class="com.ajacker.com.ajacker.service.impl.AccountServiceImpl3">
+        <!--这里的name属性是setXXX的XXX，不一定非得是属性名-->
+
+        <property name="myStrs">
+            <array>
+                <value>AAA</value>
+                <value>BBB</value>
+                <value>CCC</value>
+            </array>
+        </property>
+        <property name="myList">
+            <list>
+                <value>AAA</value>
+                <value>BBB</value>
+                <value>CCC</value>
+            </list>
+        </property>
+        <property name="mySet">
+            <set>
+                <value>AAA</value>
+                <value>BBB</value>
+                <value>CCC</value>
+            </set>
+        </property>
+        <property name="myMap">
+            <map>
+                <entry key="keyA" value="AAA"/>
+                <entry key="keyB" value="BBB"/>
+                <entry key="keyC" value="CCC"/>
+            </map>
+        </property>
+        <property name="myProps">
+            <props>
+                <prop key="AAA">pAA</prop>
+                <prop key="BBB">pBB</prop>
+                <prop key="CCC">pCC</prop>
+            </props>
+        </property>
+    </bean>
+
+</beans>

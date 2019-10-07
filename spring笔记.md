@@ -2,7 +2,7 @@
 typora-copy-images-to: spring笔记.assets
 ---
 
-# 1.IOC控制反转
+# 1、IOC控制反转
 
 ## 一、程序的耦合和解耦
 
@@ -478,5 +478,311 @@ public class BeanFactory {
      <bean id="accountService" class="com.ajacker.factory.StaticFactory" factory-method="getAccountService"/>
      ```
 
-# 二、DI依赖注入
+# 2、DI依赖注入(DITest)
 
+## 一、依赖注入的概念
+
+- 依赖注入(Dependency Injection)是spring框架**核心ioc的具体实现**.
+
+- 通过**控制反转,我们把创建对象托管给了spring**,但是代码中不可能消除所有依赖,例如:业务层仍然会调用持久层的方法,因此业务层类中应包含持久化层的实现类对象.
+  我们**等待框架通过配置的方式将持久层对象传入业务层,而不是直接在代码中new某个具体的持久化层实现类**,这种方式称为依赖注入.
+
+## 二、依赖注入的方法
+
+因为我们是通过反射的方式来创建属性对象的,而不是使用new关键字,因此我们要指定创建出对象各字段的取值.
+
+### 使用构造函数注入
+- 通过类默认的构造函数来给创建类的字段赋值,**相当于调用类的构造方法**.
+
+- 涉及的标签: `<constructor-arg>`用来定义构造函数的参数,其属性可大致分为两类:
+  1. 寻找要赋值给的字段
+     `index`: 指定参数在构造函数参数列表的索引位置
+     `type`: 指定参数在构造函数中的数据类型
+     `name`: 指定参数在构造函数中的变量名,最常用的属性
+  2. 指定赋给字段的值
+     `value`: 给基本数据类型和String类型赋值
+     `ref`: 给**其它Bean类型的字段赋值**,ref属性的值应为配置文件中配置的Bean的id
+
+1. 为要注入的类添加字段和构造函数
+
+   ```java
+   /**
+    * @author ajacker
+    * 账户的业务层实现类
+    */
+   public class AccountServiceImpl implements IAccountService {
+       /**
+        * 如果数据经常变化 则不适合用配置文件注入
+        */
+       private String name;
+       private Integer age;
+       private Date birthday;
+   
+       public AccountServiceImpl(String name, Integer age, Date birthday) {
+           this.name = name;
+           this.age = age;
+           this.birthday = birthday;
+       }
+   
+       @Override
+       public void saveAccount() {
+           System.out.println("service中的saveAccount被执行了。。。"+name+","+age+","+birthday);
+       }
+   }
+   ```
+
+2. 配置注入xml
+
+    ```xml
+   <!--构造函数注入-->
+   <bean id="accountService" class="com.ajacker.service.impl.AccountServiceImpl">
+       <constructor-arg name="name" value="test"/>
+       <constructor-arg name="age" value="18"/>
+       <constructor-arg name="birthday" ref="now"/>
+   </bean>
+   <!--配置一个日期对象-->
+   <bean id="now" class="java.util.Date"/>
+    ```
+
+3. 运行结果
+
+   ![1570456066190](spring笔记.assets/1570456066190.png)
+
+### 使用set注入(常用)
+
+- 在类中提供需要注入成员属性的set方法,创建对象只调用要赋值属性的set方法.
+
+- 涉及的标签: `<property>`,用来定义要调用set方法的成员. 其主要属性可大致分为两类:
+
+  1. 指定要调用set方法赋值的成员字段
+     - `name`：要调用set方法赋值的成员字段
+
+  2. 指定赋给字段的值
+     - `value`: 给基本数据类型和String类型赋值
+     - `ref`: 给其它Bean类型的字段赋值,ref属性的值应为配置文件中配置的Bean的id
+
+1. 为要注入的类添加Setter方法
+
+   ```java
+   package com.ajacker.service.impl;
+   
+   import com.ajacker.service.IAccountService;
+   import java.util.Date;
+   
+   /**
+    * @author ajacker
+    * 账户的业务层实现类
+    */
+   public class AccountServiceImpl2 implements IAccountService {
+       /**
+        * 如果数据经常变化 则不适合用配置文件注入
+        */
+       private String name;
+       private Integer age;
+       private Date birthday;
+   
+       public void setUserName(String name) {
+           this.name = name;
+       }
+   
+       public void setAge(Integer age) {
+           this.age = age;
+       }
+   
+       public void setBirthday(Date birthday) {
+           this.birthday = birthday;
+       }
+   
+       @Override
+       public void saveAccount() {
+           System.out.println("service中的saveAccount被执行了。。。"+name+","+age+","+birthday);
+       }
+   }
+   ```
+
+2. 配置注入xml
+
+   ```xml
+   <!--set方法注入-->
+   <bean id="accountService2" class="com.ajacker.service.impl.AccountServiceImpl2">
+   	<!--这里的name属性是setXXX的XXX，不一定非得是属性名-->
+   	<property name="userName" value="test"/>
+   	<property name="age" value="19"/>
+   	<property name="birthday" ref="now"/>
+   </bean>
+   <!--配置一个日期对象-->
+   <bean id="now" class="java.util.Date"/>
+   ```
+
+### 注入集合字段
+
+- 集合字段及其对应的标签按照集合的结构分为两类: **相同结构的集合标签之间可以互相替换.**
+
+  1. 只有键的结构:
+     - 数组字段:` <array>`标签表示集合,`<value>`标签表示集合内的成员.
+     - List字段: `<list>`标签表示集合,`<value>`标签表示集合内的成员.
+     - Set字段: `<set>`标签表示集合,`<value>`标签表示集合内的成员.
+       其中`<array>,<list>,<set>`标签之间**可以互相替换**使用.
+
+  2. 键值对的结构:
+     - Map字段: `<map>`标签表示集合,`<entry>`标签表示集合内的键值对,其key属性表示键,value属性表示值.
+     - Properties字段: `<props>`标签表示集合,`<prop>`标签表示键值对,其key属性表示键,标签内的内容表示值.
+     - 其中`<map>,<props>`标签之间,`<entry>,<prop>`标签之间**可以互相替换**使用.
+
+1. 为注入的类添加复杂类型（集合）字段
+
+   ```java
+   package com.ajacker.service.impl;
+   
+   
+   import com.ajacker.service.IAccountService;
+   
+   import java.util.*;
+   
+   /**
+    * @author ajacker
+    * 账户的业务层实现类
+    */
+   public class AccountServiceImpl3 implements IAccountService {
+       private String[] myStrs;
+       private List<String> myList;
+       private Set<String> mySet;
+       private Map<String,String> myMap;
+       private Properties myProps;
+   
+       public void setMyStrs(String[] myStrs) {
+           this.myStrs = myStrs;
+       }
+   
+       public void setMyList(List<String> myList) {
+           this.myList = myList;
+       }
+   
+       public void setMySet(Set<String> mySet) {
+           this.mySet = mySet;
+       }
+   
+       public void setMyMap(Map<String, String> myMap) {
+           this.myMap = myMap;
+       }
+   
+       public void setMyProps(Properties myProps) {
+           this.myProps = myProps;
+       }
+   
+       @Override
+       public void saveAccount() {
+           System.out.println(Arrays.toString(myStrs));
+           System.out.println(myList);
+           System.out.println(mySet);
+           System.out.println(myMap);
+           System.out.println(myProps);
+       }
+   }
+   ```
+
+2. 配置xml文件注入
+
+   ```xml
+   <!--集合类型的注入-->
+       <bean id="accountService3" class="com.ajacker.service.impl.AccountServiceImpl3">
+           <!--这里的name属性是setXXX的XXX，不一定非得是属性名-->
+   
+           <property name="myStrs">
+               <array>
+                   <value>AAA</value>
+                   <value>BBB</value>
+                   <value>CCC</value>
+               </array>
+           </property>
+           <property name="myList">
+               <list>
+                   <value>AAA</value>
+                   <value>BBB</value>
+                   <value>CCC</value>
+               </list>
+           </property>
+           <property name="mySet">
+               <set>
+                   <value>AAA</value>
+                   <value>BBB</value>
+                   <value>CCC</value>
+               </set>
+           </property>
+           <property name="myMap">
+               <map>
+                   <entry key="keyA" value="AAA"/>
+                   <entry key="keyB" value="BBB"/>
+                   <entry key="keyC" value="CCC"/>
+               </map>
+           </property>
+           <property name="myProps">
+               <props>
+                   <prop key="AAA">pAA</prop>
+                   <prop key="BBB">pBB</prop>
+                   <prop key="CCC">pCC</prop>
+               </props>
+           </property>
+       </bean>
+   ```
+
+3. 运行结果
+
+   ```
+   [AAA, BBB, CCC]
+   [AAA, BBB, CCC]
+   [AAA, BBB, CCC]
+   {keyA=AAA, keyB=BBB, keyC=CCC}
+   {AAA=pAA, CCC=pCC, BBB=pBB}
+   ```
+
+## 三、使用注解实现IOC
+
+### 常用注解
+
+#### 用于创建对象的注解
+
+这些注解的作用**相当于**`bean.xml`中的`<bean>`标签
+
+- `@Component`: 把当前类对象存入spring容器中,其属性如下:
+  - `value`: 用于指定当前类的id. 不写时**默认值是当前类名,且首字母改小写**
+- `@Controller`: 将当前表现层对象存入spring容器中
+- `@Service`: 将当前业务层对象存入spring容器中
+- `@Repository`: 将当前持久层对象存入spring容器中
+- `@Controller,@Service,@Repository`注解的作用和属性与@Component是一模一样的,**可以相互替代**,它们的作用是使三层对象的分别更加清晰.
+
+#### 用于注入数据的注解
+
+这些注解的作用**相当于**`bean.xml`中的`<property>`标签
+
+- `@Autowired`: 自动按照**成员变量类型**注入.
+  - 注入过程
+    - 当spring容器中**有且只有一个对象的类型与要注入的类型相同**时,注入该对象.
+    - 当spring容器中有**多个对象类型**与要注入的类型相同时,**使用要注入的变量名作为bean的id**,在spring - 容器查找,找到则注入该对象.找不到则报错.
+  - 出现位置: 既可以在变量上,也可以在方法上
+  - 细节: 使用注解注入时,set方法可以省略
+- `@Qualifier`: 在**自动按照类型注入的基础之上,再按照bean的id注入.**
+  - 出现位置: 既可以在变量上,也可以在方法上.注入变量时不能独立使用,必须和`@Autowired`一起使用; **注入方法时可以独立使用**.
+  - 属性:
+    - value: 指定bean的id
+- `@Resource`: **直接按照bean的id注入**,它可以独立使用.独立使用时相当于同时使用`@Autowired`和`@Qualifier`两个注解.
+  - 属性:
+    - name: 指定bean的id
+- `@Value`: 注入**基本数据类型和String类型数据**
+  - 属性:
+    - value: 用于指定数据的值,可以使用el表达式(`${表达式}`)
+
+#### 用于改变作用范围的注解
+这些注解的作用相当于`bean.xml`中的`<bean>`标签的`scope`属性.
+
+- `@Scope`: 指定`bean`的作用范围
+  - 属性:
+    - `value`: 用于指定作用范围的取值,`"singleton","prototype","request","session","globalsession"`
+
+#### 和生命周期相关的注解
+
+这些注解的作用相当于`bean.xml`中的`<bean>`标签的`init-method`和`destroy-method`属性
+
+- `@PostConstruct`: 用于指定初始化方法
+
+- `@PreDestroy`: 用于指定销毁方法

@@ -4,7 +4,7 @@
        xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd">
 
     <!--    第一种方式，使用默认无参构造函数创建对象，如果没有无参构造函数则失败-->
-    <!--    <bean id="accountService" class="com.ajacker.service.impl.AccountServiceImpl"/>-->
+    <!--    <bean id="accountService" class="com.AccountServiceImpl"/>-->
 
     <!--第二种方式，使用普通工厂中的方法创建对象并存入Spring容器-->
     <!--    <bean id="instanceFactory" class="com.ajacker.factory.InstanceFactory"/>-->

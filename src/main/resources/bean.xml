@@ -3,6 +3,6 @@
        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
        xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd">
     <!--把对象的创建交给spring管理-->
-    <bean id="accountService" class="com.ajacker.xmltest.service.impl.AccountServiceImpl"/>
-    <bean id="accountDao" class="com.ajacker.xmltest.dao.impl.AccountDaoImpl"/>
+    <bean id="accountService" class="com.ajacker.xmltest.com.ajacker.service.impl.AccountServiceImpl"/>
+    <bean id="accountDao" class="com.ajacker.xmltest.com.ajacker.dao.impl.AccountDaoImpl"/>
 </beans>
