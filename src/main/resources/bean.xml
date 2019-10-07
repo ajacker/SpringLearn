@@ -5,5 +5,4 @@
     <!--把对象的创建交给spring管理-->
     <bean id="accountService" class="com.ajacker.xmltest.service.impl.AccountServiceImpl"/>
     <bean id="accountDao" class="com.ajacker.xmltest.dao.impl.AccountDaoImpl"/>
-
 </beans>
