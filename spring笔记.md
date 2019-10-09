@@ -542,7 +542,7 @@ public class BeanFactory {
    </bean>
    <!--配置一个日期对象-->
    <bean id="now" class="java.util.Date"/>
-    ```
+   ```
 
 3. 运行结果
 
@@ -736,11 +736,11 @@ public class BeanFactory {
    {AAA=pAA, CCC=pCC, BBB=pBB}
    ```
 
-## 三、使用注解实现IOC
+# 3、使用注解实现IOC
 
-### 常用注解
+## 一、常用注解
 
-#### 用于创建对象的注解
+### 用于创建对象的注解
 
 这些注解的作用**相当于**`bean.xml`中的`<bean>`标签
 
@@ -751,7 +751,7 @@ public class BeanFactory {
 - `@Repository`: 将当前持久层对象存入spring容器中
 - `@Controller,@Service,@Repository`注解的作用和属性与@Component是一模一样的,**可以相互替代**,它们的作用是使三层对象的分别更加清晰.
 
-#### 用于注入数据的注解
+### 用于注入数据的注解
 
 这些注解的作用**相当于**`bean.xml`中的`<property>`标签
 
@@ -772,17 +772,452 @@ public class BeanFactory {
   - 属性:
     - value: 用于指定数据的值,可以使用el表达式(`${表达式}`)
 
-#### 用于改变作用范围的注解
+### 用于改变作用范围的注解
 这些注解的作用相当于`bean.xml`中的`<bean>`标签的`scope`属性.
 
 - `@Scope`: 指定`bean`的作用范围
   - 属性:
     - `value`: 用于指定作用范围的取值,`"singleton","prototype","request","session","globalsession"`
 
-#### 和生命周期相关的注解
+### 和生命周期相关的注解
 
 这些注解的作用相当于`bean.xml`中的`<bean>`标签的`init-method`和`destroy-method`属性
 
 - `@PostConstruct`: 用于指定初始化方法
 
 - `@PreDestroy`: 用于指定销毁方法
+
+### 这些注解的一个例子:
+
+> `AccountServiceImpl`类：
+>
+> ```java
+> @Service(value = "accountService")
+> @Scope(value = "singleton")
+> public class AccountServiceImpl implements IAccountService {
+>     @Autowired
+>     @Qualifier(value = "accountDao")
+>     private IAccountDao accountDao;
+> 
+>     @PostConstruct
+>     public void init(){
+>         System.out.println("初始化方法调用");
+>     }
+> 
+>     @PreDestroy
+>     public void destroy(){
+>         System.out.println("销毁方法调用");
+>     }
+> 
+>     @Override
+>     public void saveAccount() {
+>         accountDao.saveAccount();
+>     }
+> }
+> ```
+>
+> 表现层代码:
+>
+> ```java
+> public class Client {
+>     public static void main(String[] args) {
+>         //获取核心容器对象
+>         AbstractApplicationContext ac = new ClassPathXmlApplicationContext("bean.xml");
+>         //根据id获取对象
+>         IAccountService as = ac.getBean("accountService", IAccountService.class);
+>         IAccountService as2 = ac.getBean("accountService", IAccountService.class);
+>         System.out.println("是否为单例："+as.equals(as2));
+>         as.saveAccount();
+>         ac.close();
+>     }
+> }
+> ```
+>
+> 结果：
+>
+> ```
+> 初始化方法调用
+> 是否为单例：true
+> 保存了账户
+> 销毁方法调用
+> ```
+>
+> 如果设置为多例模式（`@Scope(value = "prototype")`）的结果为
+>
+> ```
+> 初始化方法调用
+> 初始化方法调用
+> 是否为单例：false
+> 保存了账户
+> ```
+>
+> 可以看到调用了两次初始化方法，没有**调用销毁是因为多例对象的死亡由java的GC自动管理**
+
+## 二、spring的半注解配置和纯注解配置
+
+### 半注解配置
+
+在半注解配置下,spring容器仍然使用`ClassPathXmlApplicationContext`类从`xml`文件中读取`IOC`配置,同时在`xml`文件中**告知spring创建容器时要扫描的包.**
+
+例如,使用半注解模式时,上述简单实例中的`beans.xml`内容如下:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+        http://www.springframework.org/schema/beans/spring-beans.xsd
+        http://www.springframework.org/schema/context
+        http://www.springframework.org/schema/context/spring-context.xsd">
+    <!--告知Spring需要扫描注解的包-->
+    <context:component-scan base-package="com.ajacker"/>
+</beans>
+```
+
+# 4、案例
+
+## 一、纯注解配置案例（XmlIOCTest）
+
+### 1. 编写业务层
+
+- 业务层接口`IAccountService.java`
+
+  ```java
+  /**
+   * @author ajacker
+   * 账户的业务层接口
+   */
+  public interface IAccountService {
+  
+      /**
+       * 查询所有
+       * @return
+       */
+      List<Account> findAllAccount();
+  
+      /**
+       * 查询一个
+       * @param id
+       * @return
+       */
+      Account findAccountById(Integer id);
+  
+      /**
+       *  保存操作
+       * @param account
+       */
+      void saveAccount(Account account);
+  
+      /**
+       * 更新
+       * @param account
+       */
+      void updateAccount(Account account);
+  
+      /**
+       * 删除
+       * @param id
+       */
+      void deleteAccount(Integer id);
+  }
+  ```
+
+- 业务层实现类`AccountServiceImpl.java`，调用持久层对象的函数
+
+  ```java
+  /**
+   * @author ajacker
+   * 账户的业务层实现类
+   */
+  public class AccountServiceImpl implements IAccountService {
+      private IAccountDao accountDao;
+  
+      public void setAccountDao(IAccountDao accountDao) {
+          this.accountDao = accountDao;
+      }
+  
+      @Override
+      public List<Account> findAllAccount() {
+          return accountDao.findAllAccount();
+      }
+  
+      @Override
+      public Account findAccountById(Integer id) {
+          return accountDao.findAccountById(id);
+      }
+  
+      @Override
+      public void saveAccount(Account account) {
+          accountDao.saveAccount(account);
+      }
+  
+      @Override
+      public void updateAccount(Account account) {
+          accountDao.updateAccount(account);
+      }
+  
+      @Override
+      public void deleteAccount(Integer id) {
+          accountDao.deleteAccount(id);
+      }
+  
+  }
+  ```
+
+### 2. 编写持久层
+
+- 持久层接口`IAccountDao.java`
+
+  ```java
+  /**
+   * @author ajacker
+   * 账户的持久层接口
+   */
+  public interface IAccountDao {
+      /**
+       * 查询所有
+       * @return
+       */
+      List<Account> findAllAccount();
+  
+      /**
+       * 查询一个
+       * @return
+       */
+      Account findAccountById(Integer id);
+  
+      /**
+       *  保存操作
+       * @param account
+       */
+      void saveAccount(Account account);
+  
+      /**
+       * 更新
+       * @param account
+       */
+      void updateAccount(Account account);
+  
+      /**
+       * 删除
+       * @param id
+       */
+      void deleteAccount(Integer id);
+  }
+  ```
+
+- 持久层实现类`AccountDaoImpl.java`，完成数据库的操作
+
+  ```java
+  /**
+   * @author ajacker
+   */
+  public class AccountDaoImpl implements IAccountDao {
+      private QueryRunner runner;
+  
+      public void setRunner(QueryRunner runner) {
+          this.runner = runner;
+      }
+  
+      @Override
+      public List<Account> findAllAccount() {
+          try {
+              return runner.query("select * from account", new BeanListHandler<>(Account.class));
+          } catch (SQLException e) {
+              throw new RuntimeException();
+          }
+      }
+  
+      @Override
+      public Account findAccountById(Integer id) {
+          try {
+              return runner.query("select * from account where id = ?", new BeanHandler<>(Account.class),id);
+          } catch (SQLException e) {
+              throw new RuntimeException();
+          }
+      }
+  
+      @Override
+      public void saveAccount(Account account) {
+          try {
+              runner.update("insert into account(name,money) values(?,?)",account.getName(),account.getMoney());
+          } catch (SQLException e) {
+              throw new RuntimeException();
+          }
+      }
+  
+      @Override
+      public void updateAccount(Account account) {
+          try {
+              runner.update("update account set name=?,money=? where id=?",account.getName(),account.getMoney(),account.getId());
+          } catch (SQLException e) {
+              throw new RuntimeException();
+          }
+      }
+  
+      @Override
+      public void deleteAccount(Integer id) {
+          try {
+              runner.update("delete from account where id=?",id);
+          } catch (SQLException e) {
+              throw new RuntimeException();
+          }
+      }
+  
+  }
+  
+  ```
+
+### 3. 编写控制层
+
+- 实体类`Account.java`
+
+  ```java
+  /**
+   * @author ajacker
+   * 账户的实体类
+   */
+  public class Account {
+      private Integer id;
+      private String name;
+      private Float money;
+  
+      public Integer getId() {
+          return id;
+      }
+  
+      public void setId(Integer id) {
+          this.id = id;
+      }
+  
+      public String getName() {
+          return name;
+      }
+  
+      public void setName(String name) {
+          this.name = name;
+      }
+  
+      public Float getMoney() {
+          return money;
+      }
+  
+      public void setMoney(Float money) {
+          this.money = money;
+      }
+  
+      @Override
+      public String toString() {
+          return "Account{" +
+                  "id=" + id +
+                  ", name='" + name + '\'' +
+                  ", money=" + money +
+                  '}';
+      }
+  }
+  ```
+
+### 4. 配置xml
+
+- `bean.xml`，其中注意使用的`property`代表需要提供`setter`方法注入
+
+  ```xml
+  <?xml version="1.0" encoding="UTF-8"?>
+  <beans xmlns="http://www.springframework.org/schema/beans"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://www.springframework.org/schema/beans
+          http://www.springframework.org/schema/beans/spring-beans.xsd">
+  
+      <!--配置Service-->
+      <bean id="accountService" class="com.ajacker.service.impl.AccountServiceImpl">
+          <!--注入dao-->
+          <property name="accountDao" ref="accountDao"/>
+      </bean>
+      <!--配置Dao对象-->
+      <bean id="accountDao" class="com.ajacker.dao.impl.AccountDaoImpl">
+          <property name="runner" ref="queryRunner"/>
+      </bean>
+      <!--配置QueryRunner对象-->
+      <bean id="queryRunner" class="org.apache.commons.dbutils.QueryRunner" scope="prototype">
+          <!--注入数据源-->
+          <constructor-arg name="ds" ref="dataSource"/>
+      </bean>
+      <!--配置数据源-->
+      <bean id="dataSource" class="com.mchange.v2.c3p0.ComboPooledDataSource">
+          <!--连接数据库的必要信息-->
+          <property name="driverClass" value="com.mysql.cj.jdbc.Driver"/>
+          <property name="jdbcUrl" value="jdbc:mysql://localhost:3306/spring?serverTimezone=Asia/Shanghai"/>
+          <property name="user" value="root"/>
+          <property name="password" value="456852"/>
+      </bean>
+  </beans>
+  ```
+
+### 5. 编写测试类
+
+- `AccountServiceTest.java`，使用`Junit`进行单元测试
+
+  ```java
+  /**
+   * 使用junit单元测试配置
+   */
+  public class AccountServiceTest {
+      @Test
+      public void testFindAll() {
+          //1.获取容器
+          AbstractApplicationContext ac = new ClassPathXmlApplicationContext("bean.xml");
+          //2.获取业务层对象
+          IAccountService as = ac.getBean("accountService",IAccountService.class);
+          //3.执行方法
+          List<Account> accounts = as.findAllAccount();
+          accounts.forEach(System.out::println);
+      }
+      @Test
+      public void testFindOne() {
+          //1.获取容器
+          AbstractApplicationContext ac = new ClassPathXmlApplicationContext("bean.xml");
+          //2.获取业务层对象
+          IAccountService as = ac.getBean("accountService",IAccountService.class);
+          //3.执行方法
+          Account account = as.findAccountById(1);
+          System.out.println(account);
+      }
+      @Test
+      public void testSave() {
+          //1.获取容器
+          AbstractApplicationContext ac = new ClassPathXmlApplicationContext("bean.xml");
+          //2.获取业务层对象
+          IAccountService as = ac.getBean("accountService",IAccountService.class);
+          //3.执行方法
+          Account account = new Account();
+          account.setName("test");
+          account.setMoney(1234f);
+          as.saveAccount(account);
+          System.out.println(account);
+      }
+      @Test
+      public void testUpdate() {
+          //1.获取容器
+          AbstractApplicationContext ac = new ClassPathXmlApplicationContext("bean.xml");
+          //2.获取业务层对象
+          IAccountService as = ac.getBean("accountService",IAccountService.class);
+          //3.执行方法
+          Account account = as.findAccountById(1);
+          account.setMoney(555f);
+          as.updateAccount(account);
+          System.out.println(account);
+      }
+      @Test
+      public void testDelete() {
+          //1.获取容器
+          AbstractApplicationContext ac = new ClassPathXmlApplicationContext("bean.xml");
+          //2.获取业务层对象
+          IAccountService as = ac.getBean("accountService",IAccountService.class);
+          //3.执行方法
+          as.deleteAccount(3);
+      }
+  }
+  ```
+
+  
