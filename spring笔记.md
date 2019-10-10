@@ -1424,3 +1424,533 @@ public class BeanFactory {
 
 # 第二部分 AOP面向切片编程
 
+## A. 代码冗余与装饰器模式(AOPTest)
+
+### 一、代码冗余现象
+
+- 为了保证数据库的一致性，我们添加了事务控制，但是这样使得每个数据库操作都要加上重复的事务控制的代码,如下:
+
+  ```java
+  @Override
+      public Account findAccountById(Integer id) {
+          try {
+              //1.开启事务
+              transactionManager.beginTransaction();
+              //2.执行操作
+              Account account = accountDao.findAccountById(id);
+              //3.提交事务
+              transactionManager.commit();
+              //4.返回结果
+              return account;
+          }catch (Exception e){
+              //5.回滚操作
+              transactionManager.rollback();
+          }finally {
+              //6.释放连接
+              transactionManager.release();
+          }
+          return null;
+      }
+  
+      @Override
+      public void saveAccount(Account account) {
+          try {
+              //1.开启事务
+              transactionManager.beginTransaction();
+              //2.执行操作
+              accountDao.saveAccount(account);
+              //3.提交事务
+              transactionManager.commit();
+          }catch (Exception e){
+              //5.回滚操作
+              transactionManager.rollback();
+          }finally {
+              //6.释放连接
+              transactionManager.release();
+          }
+      }
+  ```
+
+- 这会导致两个问题：
+  - 业务层方法变得臃肿了,里面充斥着很多重复代码（事务控制）
+  - 业务层方法和事务控制方法耦合高. 若提交,回滚,释放资源中任何一个**方法名变更,都需要修改业务层的代码**
+
+### 二、动态代理解决方案
+
+- 我们使用动态代理对上述Service进行改造,创建`BeanFactory`类作为service层**对象工厂**,通过其`getAccountService`方法得到业务层对象
+
+    ```java
+    /**
+     * @author ajacker
+     * 用于创建Service的代理对象的工厂
+     */
+    @Component
+    public class BeanFactory {
+    private final IAccountService accountService;
+        private final TransactionManager transactionManager;
+
+        public BeanFactory(TransactionManager transactionManager, IAccountService accountService) {
+            this.transactionManager = transactionManager;
+            this.accountService = accountService;
+        }
+    
+        @Bean("proxyAccountService")
+        public IAccountService getAccountService(){
+            return (IAccountService) Proxy.newProxyInstance(accountService.getClass().getClassLoader(),
+                accountService.getClass().getInterfaces(),
+                    (proxy, method, args) -> {
+                        Object rtValue;
+                        try {
+                            //1.开启事务
+                        transactionManager.beginTransaction();
+                            //2.执行操作
+                            rtValue = method.invoke(accountService, args);
+                            //3.提交事务
+                            transactionManager.commit();
+                            //4.返回结果
+                            return rtValue;
+                        }catch (Exception e){
+                            //5.回滚操作
+                            transactionManager.rollback();
+                            throw new RuntimeException(e);
+                        }finally {
+                            //6.释放连接
+                            transactionManager.release();
+                        }
+                    });
+        }
+    }
+    
+    ```
+- 将业务层代码恢复到之前没有事务控制的情况:
+
+  ```java
+   @Override
+      public List<Account> findAllAccount() {
+          return accountDao.findAllAccount();
+      }
+  
+      @Override
+      public Account findAccountById(Integer id) {
+          return accountDao.findAccountById(id);
+      }
+  ```
+
+- 将测试类中的对象注入改为代理后的业务层对象(`"proxyAccountService"`)
+
+    ```java
+    /**
+     * 使用junit单元测试配置
+     */
+    @RunWith(SpringJUnit4ClassRunner.class)
+    @ContextConfiguration("classpath:bean.xml")
+    public class AccountServiceTest {
+        @Resource(name = "proxyAccountService")
+        private IAccountService as;
+    
+        @Test
+        public void testFindAll() {
+            List<Account> accounts = as.findAllAccount();
+            accounts.forEach(System.out::println);
+        }
+    
+        @Test
+        public void testTransfer() {
+            as.transfer("aaa", "bbb", 100f);
+        }
+    }
+    
+    ```
+
+- 此时我们就通过`Spring `获取了动态代理过的对象
+
+## B. AOP解决代码冗余
+
+### 一、 AOP相关术语
+
+  - Joinpoint(连接点): 被拦截到的方法.
+
+  - Pointcut(切入点): 我们对其进行增强的方法.
+
+  - Advice(通知/增强): 对切入点进行的增强操作
+    - 包括前置通知,后置通知,异常通知,最终通知,环绕通知
+
+  - Weaving(织入): 是指把增强应用到目标对象来创建新的代理对象的过程。
+
+  - Aspect(切面): 是切入点和通知的结合
+
+### 二、 使用XML配置AOP的步骤
+
+#### 1. 添加Aop的依赖
+
+```xml
+<dependency>
+          <groupId>org.aspectj</groupId>
+          <artifactId>aspectjweaver</artifactId>
+          <version>1.9.4</version>
+</dependency>
+```
+
+#### 2. 在`bean.xml`中引入约束
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:aop="http://www.springframework.org/schema/aop"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+        http://www.springframework.org/schema/beans/spring-beans.xsd
+        http://www.springframework.org/schema/aop
+        http://www.springframework.org/schema/aop/spring-aop.xsd">
+</beans>
+```
+
+#### 3. 使用`<aop:config>`标签声明AOP配置
+
+```xml
+<aop:config>
+    <!--aop相关的配置-->
+</aop:config>
+```
+
+#### 4. 使用`<aop:aspect>`标签配置切面
+
+- `id`: 指定切面的`id`
+- `ref`: 引用通知类的`id`
+
+```xml
+<aop:config>
+	<aop:aspect id="logAdvice" ref="logger">
+    	<!--配置通知的类型要写在此处-->
+    </aop:aspect>
+</aop:config>
+```
+
+#### 5. 使用`<aop:pointcut>`配置切入点
+
+- `id`: 指定切入点表达式的`id`
+- `expression`: 指定**切入点表达式**
+
+```xml
+<aop:config>
+        <aop:aspect id="logAdvice" ref="logger">
+    		<!--配置切入点-->
+            <aop:pointcut id="accountServicePoints" expression="execution( * com.ajacker.service.impl.AccountServiceImpl.*(..))"/>
+        </aop:aspect>
+</aop:config>
+```
+
+#### 6. 配置具体的通知方法
+
+- 类型：
+  - `<aop:before>`: 配置前置通知,指定的增强方法在切入点方法之前执行.
+  - `<aop:after-returning>`: 配置后置通知,指定的增强方法在切入点方法正常执行之后执行.
+  - `<aop:after-throwing>`: 配置异常通知,指定的增强方法在切入点方法产生异常后执行.
+  - `<aop:after>`: 配置最终通知,无论切入点方法执行时是否发生异常,指定的增强方法都会最后执行.
+  - `<aop:around>`: 配置环绕通知,可以在代码中手动控制增强代码的执行时机.
+  
+- 属性：
+
+  - `method`: 指定通知类中的增强方法名.
+  - `ponitcut-ref`: 指定切入点的表达式的`id`
+  - `poinitcut`: 指定切入点表达式
+
+  > 其中`pointcut-ref`和`point-ref`属性只能有其中一个
+
+- 一个例子：
+
+  ```xml
+  <!--配置aop-->
+  <aop:config>
+      <aop:aspect id="logAdvice" ref="logger">
+          <aop:pointcut id="pt" expression="execution( * com.ajacker.service.impl.AccountServiceImpl.*(..))"/>
+          <!--前置通知-->
+          <aop:before method="printLogBefore" pointcut-ref="pt"/>
+          <!--异常通知-->
+          <aop:after-throwing method="printLogAfterThrowing" pointcut-ref="pt"/>
+          <!--后置通知-->
+          <aop:after-returning method="printLogAfterReturning" pointcut-ref="pt"/>
+          <!--最终通知-->
+          <aop:after method="printLogAfter" pointcut-ref="pt"/>
+          <!--环绕通知-->
+          <aop:around method="printLogAround" pointcut-ref="pt"/>
+      </aop:aspect>
+  </aop:config>
+  ```
+
+  
+
+#### *.1 切入点表达式
+
+- 格式：`execution([修饰符] 返回值类型 包路径.类名.方法名(参数))`
+
+- 写法：
+
+  - 完全形式：
+
+    ```xml
+    <aop:pointcut expression="execution( public void com.ajacker.service.impl.AccountServiceImpl.saveAccount())" id="pt"/>
+    ```
+
+  - 省略访问修饰符：
+
+    ```xml
+    <aop:pointcut expression="execution( void com.ajacker.service.impl.AccountServiceImpl.saveAccount())" id="pt"/>
+    ```
+
+  - 用`*`表示任意返回值:
+
+    ```xml
+    <aop:pointcut expression="execution( * com.ajacker.service.impl.AccountServiceImpl.saveAccount())" id="pt"/t>
+    ```
+
+  - 用`*`表示任意包，但是`*.`的**个数要和包的层级数相匹配**
+
+    ```xml
+    <aop:pointcut expression="execution( * *.*.*.*.AccountServiceImpl.saveAccount())" id="pt"/>
+    ```
+
+  - 用`*..`表示当前包及其子包
+
+    ```xml
+    <aop:pointcut expression="execution( * *..AccountServiceImpl.saveAccount())" id="pt"/>
+    ```
+
+  - 用`*`表示任意类
+
+    ```xml
+    <aop:pointcut expression="execution( * *..*.saveAccount())" id="pt"/>
+    ```
+
+  - 用`*`表示任意方法
+
+    ```xml
+    <aop:pointcut expression="execution( * *..*.*())" id="pt"/>
+    ```
+
+  - 用`*`表示任意类型参数（必须有参数，不匹配无参）
+
+    ```xml
+    <aop:pointcut expression="execution( * *..*.*(*))" id="pt"/>
+    ```
+
+  - 参数内用`..`表示有无参数均可，任意类型也可(**全通配写法**)
+
+    ```xml
+    <aop:pointcut expression="execution( * *..*.*(..))" id="pt"/>
+    ```
+
+- 通常写法:
+
+  一般我们都是对业务层所有实现类的所有方法进行增强,因此切入点表达式写法通常为
+
+  ```xml
+  <aop:pointcut id="pt" expression="execution( * com.ajacker.service.impl.AccountServiceImpl.*(..))"/>
+  ```
+
+#### *.2 环绕通知
+
+- Spring是基于动态代理对方法进行增强的,`前置通知`,`后置通知`,`异常通知`,`最终通知`在增强方法中的执行时机如下:
+
+  ```java
+  // 增强方法
+  @Override
+  public Object invoke(Object proxy, Method method, Object[] args) throws Throwable{
+      Object rtValue = null;
+      try {
+          // 执行前置通知
+          
+          // 执行原方法
+          rtValue = method.invoke(accountService, args); 
+          
+          // 执行后置通知
+          return rtValue;
+      } catch (Exception e) {
+          // 执行异常通知
+      } finally {
+          // 执行最终通知
+      }
+  }
+  ```
+
+- 我们可通过`环绕通知`，以类似于动态代理的方式更自由地控制增强代码执行的时机
+
+  Spring框架为我们提供一个接口ProceedingJoinPoint,它的实例对象可以作为环绕通知方法的参数,通过参数控制被增强方法的执行时机.
+
+  - `ProceedingJoinPoint`对象的`getArgs()`方法返回被拦截的参数
+  - `ProceedingJoinPoint`对象的`proceed()`方法执行被拦截的方法
+
+  ```java
+  public Object printLogAround(ProceedingJoinPoint joinPoint) {
+      Object rtValue;
+      try {
+          Object[] args = joinPoint.getArgs();
+          System.out.println("Logger类中的printLogAround开始记录日志...前置");
+          rtValue = joinPoint.proceed(args);
+          System.out.println("Logger类中的printLogAround开始记录日志...后置");
+          return rtValue;
+      } catch (Throwable throwable) {
+          System.out.println("Logger类中的printLogAround开始记录日志...异常");
+          throw new RuntimeException(throwable);
+      }finally {
+          System.out.println("Logger类中的printLogAround开始记录日志...最终");
+      }
+  }
+  ```
+
+## C. 使用注解实现AOP
+
+### 一、 开启AOP注解支持
+
+- 在`bean.xml`添加：
+
+  ```xml
+  <aop:aspectj-autoproxy></aop:aspectj-autoproxy>
+  ```
+
+### 二、 常用注解
+
+#### 1. 用于声明切面的注解
+
+- `@Aspect`:声明当前类为通知类,该类**定义了一个切面**.相当于xml配置中的`<aop:aspect>`标签
+
+  ```java
+  @Component("logger")
+  @Aspect
+  public class Logger {
+      // ...
+  }
+  ```
+
+#### 2. 用于声明通知的注解
+
+- 类型：
+  - `@Before`: 声明该方法为前置通知.相当于xml配置中的`<aop:before>`标签
+  - `@AfterReturning`: 声明该方法为后置通知.相当于xml配置中的`<aop:after-returning>`标签
+  - `@AfterThrowing`: 声明该方法为异常通知.相当于xml配置中的`<aop:after-throwing>`标签
+  - `@After`: 声明该方法为最终通知.相当于xml配置中的`<aop:after>`标签
+  - `@Around`: 声明该方法为环绕通知.相当于xml配置中的`<aop:around>`标签
+
+- 属性：
+  - `value`:用于指定**切入点表达式或切入点表达式的引用**
+
+#### 3. 用于指定切入点表达式的注解
+
+- `@Pointcut`: 指定切入点表达式,其属性如下:
+
+  - `value`: 指定表达式的内容
+
+  `@Pointcut`注解没有`id`属性,通过调用**被注解的方法**获取切入点表达式.
+
+### 三、半注解配置的例子（AnnotationAOPTest）
+
+#### 1. xml开启支持
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:aop="http://www.springframework.org/schema/aop"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+        http://www.springframework.org/schema/beans/spring-beans.xsd
+        http://www.springframework.org/schema/aop
+        http://www.springframework.org/schema/aop/spring-aop.xsd
+        http://www.springframework.org/schema/context
+        http://www.springframework.org/schema/context/spring-context.xsd">
+
+    <!--配置扫描的包-->
+    <context:component-scan base-package="com.ajacker"/>
+
+    <!--开启aop注解支持-->
+    <aop:aspectj-autoproxy/>
+</beans>
+```
+
+#### 2. 配置切面类，切点，通知
+
+```java
+/**
+ * @author ajacker
+ * 记录日志
+ */
+@Component("logger")
+@Aspect
+public class Logger {
+    @Pointcut("execution( * com.ajacker.service.impl.AccountServiceImpl.*(..))")
+    private void pt(){}
+
+    /**
+     * 前置通知
+     */
+    @Before("pt()")
+    public void printLogBefore(){
+        System.out.println("Logger类中的printLogBefore开始记录日志...");
+    }
+
+    /**
+     * 后置通知
+     */
+    @AfterReturning("pt()")
+    public void printLogAfterReturning(){
+        System.out.println("Logger类中的printLogAfterReturning开始记录日志...");
+    }
+
+    /**
+     * 异常通知
+     */
+    @AfterThrowing("pt()")
+    public void printLogAfterThrowing(){
+        System.out.println("Logger类中的printLogAfterThrowing开始记录日志...");
+    }
+
+    /**
+     * 最终通知
+     */
+    @After("pt()")
+    public void printLogAfter(){
+        System.out.println("Logger类中的printLogAfter开始记录日志...");
+    }
+
+    /**
+     * 环绕通知
+     */
+    @Around("pt()")
+    public Object printLogAround(ProceedingJoinPoint joinPoint) {
+        Object rtValue;
+        try {
+            Object[] args = joinPoint.getArgs();
+            System.out.println("Logger类中的printLogAround开始记录日志...前置");
+            rtValue = joinPoint.proceed(args);
+            System.out.println("Logger类中的printLogAround开始记录日志...后置");
+            return rtValue;
+        } catch (Throwable throwable) {
+            System.out.println("Logger类中的printLogAround开始记录日志...异常");
+            throw new RuntimeException(throwable);
+        }finally {
+            System.out.println("Logger类中的printLogAround开始记录日志...最终");
+        }
+    }
+}
+```
+
+### 四、纯注解配置
+
+在Spring配置类前添加`@EnableAspectJAutoProxy`注解,可以使用纯注解方式配置AOP
+
+```java
+@Configuration
+@ComponentScan(basePackages="com.ajacker")
+@EnableAspectJAutoProxy			// 允许AOP
+public class SpringConfiguration {
+    // 具体配置
+    //...
+}
+```
+
+
+
+### 五、注解配置的BUG！！
+
+- 在使用注解配置AOP时,会出现一个bug. 四个通知的调用顺序依次是:`前置通知`,`最终通知`,`后置通知`. 这会导致一些资源在执行`最终通知`时提前被释放掉了,而执行`后置通知`时就会出错.
+- 如果使用注解配置AOP，推荐使用**环绕通知**
