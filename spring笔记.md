@@ -2,14 +2,20 @@
 typora-copy-images-to: spring笔记.assets
 ---
 
-# 1、IOC控制反转
+[TOC]
 
-## 一、程序的耦合和解耦
+
+
+# 第一部分 IOC控制反转和DI依赖注入
+
+## A、IOC控制反转
+
+### 一、程序的耦合和解耦
 
 - **耦合**: 程序间的依赖关系.在开发中,应该做到解决**编译期依赖**,即**编译期不依赖,运行时才依赖**.
 - **解耦的思路**: 使用**反射来创建对**象,而**避免使用new关键字**,并**通过读取配置文件来获取要创建的对象全限定类名.**
 
-### 解耦例子：JDBC驱动
+#### 解耦例子：JDBC驱动
 
 在注册驱动的时候不使用`DriverManager`的`register`方法，而采用`Class.forName("驱动类全类名")`的方式
 
@@ -38,7 +44,7 @@ public static void main(String[] args) {
 
 这就完成了**从编译期依赖转到运行期依赖**的过程，也就是实现了一定程度的**解耦合**
 
-### 解耦例子：工厂模式 三层架构
+#### 解耦例子：工厂模式 三层架构
 
 - 首先我们模拟三层架构的实现
 
@@ -264,9 +270,9 @@ public class BeanFactory {
 
 
 
-## 二、使用Spring解决程序耦合
+### 二、使用Spring解决程序耦合
 
-### 准备工作
+#### 准备工作
 
 1. 使用maven引入依赖,创建maven项目,配置其`pom.xml`如下:
 
@@ -328,7 +334,7 @@ public class BeanFactory {
    </beans>
    ```
 
-### 修改表现层代码，通过spring创建对象
+#### 修改表现层代码，通过spring创建对象
 
 1. 将ui层代码修改为，通过容器获取了对象
 
@@ -353,16 +359,16 @@ public class BeanFactory {
 
    ![1570378333484](spring笔记.assets/1570378333484.png)
 
-## 三、使用XML配置文件实现IOC详解
+### 三、使用XML配置文件实现IOC详解
 
-### ApplicationContext方式
+#### ApplicationContext方式
 
 - 特点：
   - 读取完配置文件，**立马创建对象等待使用**
   - 单例对象使用
     - **我们实际开发中使用这个，因为加载策略会随配置文件改变**
 
-#### ApplicationContext三个常用实现类
+##### ApplicationContext三个常用实现类
 
 ![1570379339445](spring笔记.assets/1570379339445.png)
 
@@ -372,7 +378,7 @@ public class BeanFactory {
 - `FileSystemXmlApplicationContext`: 它是从磁盘路径上加载配置文件
 - `AnnotationConfigApplicationContext`: 读取注解创建容器
 
-### BeanFactory方式
+#### BeanFactory方式
 
 - 将表现层代码修改为：
 
@@ -388,9 +394,9 @@ public class BeanFactory {
   - 什么时候`getBean()`,什么时候创建
   - 多例对象使用
 
-### 使用XML配置文件实现IOC
+#### 使用XML配置文件实现IOC
 
-#### bean标签
+##### bean标签
 
 - 作用: 配置托管给spring的对象,默认情况下调用类的无参构造函数,若果没有无参构造函数则不能创建成功
 - 属性:
@@ -405,7 +411,7 @@ public class BeanFactory {
   - `init-method`：指定类中的初始化方法名称,在对象创建成功之后执行
   - `destroy-method`：指定类中销毁方法名称,对prototype多例对象没有作用,因为多利对象的销毁时机不受容器控制
 
-#### bean作用范围
+##### bean作用范围
 
 - 单例对象：`scope="singleton"`
   - 作用范围: **每个应用只有一个该对象的实例**,它的作用范围就是整个应用
@@ -420,7 +426,7 @@ public class BeanFactory {
     - 对象活着: 只要对象**在使用中**,就一直活着
     - 对象死亡: 当对象**长时间不用**时,被 java 的垃圾回收器**回收**了
 
-#### 实例化bean的三种方式（模块“threeway”）
+##### 实例化bean的三种方式（threeway）
 
 1. 使用默认无参构造函数创建对象: **默认情况下会根据默认无参构造函数来创建类对象**,若Bean类中**没有默认无参构造函数,将会创建失败**.
 
@@ -478,20 +484,20 @@ public class BeanFactory {
      <bean id="accountService" class="com.ajacker.factory.StaticFactory" factory-method="getAccountService"/>
      ```
 
-# 2、DI依赖注入(DITest)
+## B、DI依赖注入(DITest)
 
-## 一、依赖注入的概念
+### 一、依赖注入的概念
 
 - 依赖注入(Dependency Injection)是spring框架**核心ioc的具体实现**.
 
 - 通过**控制反转,我们把创建对象托管给了spring**,但是代码中不可能消除所有依赖,例如:业务层仍然会调用持久层的方法,因此业务层类中应包含持久化层的实现类对象.
   我们**等待框架通过配置的方式将持久层对象传入业务层,而不是直接在代码中new某个具体的持久化层实现类**,这种方式称为依赖注入.
 
-## 二、依赖注入的方法
+### 二、依赖注入的方法
 
 因为我们是通过反射的方式来创建属性对象的,而不是使用new关键字,因此我们要指定创建出对象各字段的取值.
 
-### 使用构造函数注入
+#### 使用构造函数注入
 - 通过类默认的构造函数来给创建类的字段赋值,**相当于调用类的构造方法**.
 
 - 涉及的标签: `<constructor-arg>`用来定义构造函数的参数,其属性可大致分为两类:
@@ -548,7 +554,7 @@ public class BeanFactory {
 
    ![1570456066190](spring笔记.assets/1570456066190.png)
 
-### 使用set注入(常用)
+#### 使用set注入(常用)
 
 - 在类中提供需要注入成员属性的set方法,创建对象只调用要赋值属性的set方法.
 
@@ -614,7 +620,7 @@ public class BeanFactory {
    <bean id="now" class="java.util.Date"/>
    ```
 
-### 注入集合字段
+#### 注入集合字段
 
 - 集合字段及其对应的标签按照集合的结构分为两类: **相同结构的集合标签之间可以互相替换.**
 
@@ -736,11 +742,11 @@ public class BeanFactory {
    {AAA=pAA, CCC=pCC, BBB=pBB}
    ```
 
-# 3、使用注解实现IOC
+## C、使用注解实现IOC
 
-## 一、常用注解
+### 一、常用注解
 
-### 用于创建对象的注解
+#### 用于创建对象的注解
 
 这些注解的作用**相当于**`bean.xml`中的`<bean>`标签
 
@@ -751,7 +757,7 @@ public class BeanFactory {
 - `@Repository`: 将当前持久层对象存入spring容器中
 - `@Controller,@Service,@Repository`注解的作用和属性与@Component是一模一样的,**可以相互替代**,它们的作用是使三层对象的分别更加清晰.
 
-### 用于注入数据的注解
+#### 用于注入数据的注解
 
 这些注解的作用**相当于**`bean.xml`中的`<property>`标签
 
@@ -772,14 +778,14 @@ public class BeanFactory {
   - 属性:
     - value: 用于指定数据的值,可以使用el表达式(`${表达式}`)
 
-### 用于改变作用范围的注解
+#### 用于改变作用范围的注解
 这些注解的作用相当于`bean.xml`中的`<bean>`标签的`scope`属性.
 
 - `@Scope`: 指定`bean`的作用范围
   - 属性:
     - `value`: 用于指定作用范围的取值,`"singleton","prototype","request","session","globalsession"`
 
-### 和生命周期相关的注解
+#### 和生命周期相关的注解
 
 这些注解的作用相当于`bean.xml`中的`<bean>`标签的`init-method`和`destroy-method`属性
 
@@ -787,7 +793,7 @@ public class BeanFactory {
 
 - `@PreDestroy`: 用于指定销毁方法
 
-### 这些注解的一个例子:
+#### 这些注解的一个例子:
 
 > `AccountServiceImpl`类：
 >
@@ -853,9 +859,9 @@ public class BeanFactory {
 >
 > 可以看到调用了两次初始化方法，没有**调用销毁是因为多例对象的死亡由java的GC自动管理**
 
-## 二、spring的半注解配置和纯注解配置
+### 二、spring的半注解配置和纯注解配置
 
-### 半注解配置
+#### 半注解配置
 
 在半注解配置下,spring容器仍然使用`ClassPathXmlApplicationContext`类从`xml`文件中读取`IOC`配置,同时在`xml`文件中**告知spring创建容器时要扫描的包.**
 
@@ -875,11 +881,11 @@ public class BeanFactory {
 </beans>
 ```
 
-## 纯注解配置
+#### 纯注解配置
 
 在纯注解配置下,我们用配置类替代`bean.xml`,spring容器使用`AnnotationApplicationContext`类从spring配置类中读取IOC配置
 
-### 关于纯注解相关的注解
+#### 关于纯注解相关的注解
 
 - `@Configuration`: 用于**指定当前类是一个spring配置类**,当创建容器时会从该类上加载注解.获取容器时需要使用AnnotationApplicationContext(有@Configuration注解的类.class).
 - `@ComponentScan`: 指定spring在初始化容器时要扫描的包,作用和`bean.xml `文件中<context:component-scan base-package="要扫描的包名"/>是一样的. 其属性如下:
@@ -892,11 +898,11 @@ public class BeanFactory {
 - `@Import`: 用于**导入其他配置类**.当我们使用@Import注解之后,有@Import注解的类就是父配置类,而导入的都是子配置类. 其属性如下:
   - `value`: 用于指定其他配置类的字节码
 
-# 4、案例
+## D、案例
 
-## 一、纯注解配置案例（XmlIOCTest）
+### 一、纯注解配置案例（XmlIOCTest）
 
-### 1. 编写业务层
+#### 1. 编写业务层
 
 - 业务层接口`IAccountService.java`
 
@@ -982,7 +988,7 @@ public class BeanFactory {
   }
   ```
 
-### 2. 编写持久层
+#### 2. 编写持久层
 
 - 持久层接口`IAccountDao.java`
 
@@ -1086,7 +1092,7 @@ public class BeanFactory {
   
   ```
 
-### 3. 编写控制层
+#### 3. 编写控制层
 
 - 实体类`Account.java`
 
@@ -1135,7 +1141,7 @@ public class BeanFactory {
   }
   ```
 
-### 4. 配置xml
+#### 4. 配置xml
 
 - `bean.xml`，其中注意使用的`property`代表需要提供`setter`方法注入
 
@@ -1171,7 +1177,7 @@ public class BeanFactory {
   </beans>
   ```
 
-### 5. 编写测试类
+#### 5. 编写测试类
 
 - `AccountServiceTest.java`，使用`Junit`进行单元测试
 
@@ -1237,9 +1243,9 @@ public class BeanFactory {
   }
   ```
 
-## 二、半注解配置案例（HalfXmlIOCTest）
+### 二、半注解配置案例（HalfXmlIOCTest）
 
-### 1. 修改业务层
+#### 1. 修改业务层
 
 - 删除`setter`方法，修改为注解形式
 
@@ -1255,7 +1261,7 @@ public class BeanFactory {
   }
   ```
 
-### 2. 修改持久层
+#### 2. 修改持久层
 
 - 删除`setter`方法，修改为注解形式
 
@@ -1275,7 +1281,7 @@ public class BeanFactory {
   
   ```
 
-### 3. 修改xml配置
+#### 3. 修改xml配置
 
 - 修改`xml`，添加命名空间依赖，删除可用注解代替的`bean`标签
 
@@ -1307,9 +1313,9 @@ public class BeanFactory {
   </beans>
   ```
 
-## 三、纯注解配置案例（AnnotationIOCTest）
+### 三、纯注解配置案例（AnnotationIOCTest）
 
-### 1. 新建总配置类
+#### 1. 新建总配置类
 
 - `config.SpringConfiguration`，并用注解配置扫描的包和子配置类字节码
 
@@ -1326,7 +1332,7 @@ public class BeanFactory {
   }
   ```
 
-### 2. 创建子配置类
+#### 2. 创建子配置类
 
 - `config.JdbcConfiguration`，并配置`properties`文件源，注入jdbc相关的配置和bean
 
@@ -1379,7 +1385,7 @@ public class BeanFactory {
   
   ```
 
-### 3. 创建jdbc配置文件
+#### 3. 创建jdbc配置文件
 
 - 在`resources`下创建配置文件`jdbcConfig.properties`
 
@@ -1390,7 +1396,7 @@ public class BeanFactory {
   jdbc.password=456852
   ```
 
-### 4. 修改测试类
+#### 4. 修改测试类
 
 - 将获取容器的实现类修改为`AnnotationConfigApplicationContext`
 
@@ -1398,4 +1404,23 @@ public class BeanFactory {
   AbstractApplicationContext ac = new AnnotationConfigApplicationContext(SpringConfiguration.class);
   ```
 
-  
+## E. 其它
+
+### 一、Spring整合Junit
+
+1. 在测试类上添加注解，配置使用spring测试，配置配置文件或配置类
+
+   ```java
+   @RunWith(SpringJUnit4ClassRunner.class)
+   @ContextConfiguration(classes = SpringConfiguration.class)
+   ```
+
+2. 在测试类中使用注解注入
+
+   ```java
+       @Resource(name = "accountService")
+       private IAccountService as;
+   ```
+
+# 第二部分 AOP面向切片编程
+
