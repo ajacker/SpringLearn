@@ -875,6 +875,23 @@ public class BeanFactory {
 </beans>
 ```
 
+## 纯注解配置
+
+在纯注解配置下,我们用配置类替代`bean.xml`,spring容器使用`AnnotationApplicationContext`类从spring配置类中读取IOC配置
+
+### 关于纯注解相关的注解
+
+- `@Configuration`: 用于**指定当前类是一个spring配置类**,当创建容器时会从该类上加载注解.获取容器时需要使用AnnotationApplicationContext(有@Configuration注解的类.class).
+- `@ComponentScan`: 指定spring在初始化容器时要扫描的包,作用和`bean.xml `文件中<context:component-scan base-package="要扫描的包名"/>是一样的. 其属性如下:
+  - `value/basePackages`: 用于指定要扫描的包,是value属性的别名
+- `@Bean`: 该注解只能写在方法上,表明使用此方法创建一个对象,并放入spring容器,其属性如下:
+  - `name`: 指定此方法创建出的bean对象的id
+  - 细节: 使用注解配置方法时,如果方法有参数,Spring框架会到容器中查找有没有可用的bean对象,查找的方式与@Autowired注解时一样的.
+- `@PropertySource`: 用于加载properties配置文件中的配置.例如配置数据源时,可以把连接数据库的信息写到properties配置文件中,就可以使用此注解指定properties配置文件的位置,其属性如下:
+  - `value`: 用于指定properties文件位置.如果是在类路径下,需要写上"classpath:"
+- `@Import`: 用于**导入其他配置类**.当我们使用@Import注解之后,有@Import注解的类就是父配置类,而导入的都是子配置类. 其属性如下:
+  - `value`: 用于指定其他配置类的字节码
+
 # 4、案例
 
 ## 一、纯注解配置案例（XmlIOCTest）
@@ -1288,6 +1305,97 @@ public class BeanFactory {
           <property name="password" value="456852"/>
       </bean>
   </beans>
+  ```
+
+## 三、纯注解配置案例（AnnotationIOCTest）
+
+### 1. 新建总配置类
+
+- `config.SpringConfiguration`，并用注解配置扫描的包和子配置类字节码
+
+  ```java
+  /**
+   * @author ajacker
+   * 此类是配置类，和bean.xml作用一样
+   */
+  @Configuration
+  @ComponentScan(basePackages = "com.ajacker")
+  @Import(JdbcConfig.class)
+  public class SpringConfiguration {
+  
+  }
+  ```
+
+### 2. 创建子配置类
+
+- `config.JdbcConfiguration`，并配置`properties`文件源，注入jdbc相关的配置和bean
+
+  ```java
+  /**
+   * @author ajacker
+   * 关于数据库的配置类
+   */
+  @Configuration
+  @PropertySource("classpath:jdbcConfig.properties")
+  public class JdbcConfig {
+      @Value("${jdbc.driver}")
+      private String driver;
+      @Value("${jdbc.url}")
+      private String url;
+      @Value("${jdbc.username}")
+      private String username;
+      @Value("${jdbc.password}")
+      private String password;
+  
+      /**
+       * 用于创建一个QueryRunner对象
+       * @param dataSource 数据源
+       * @return 对象
+       */
+      @Bean(name = "queryRunner")
+      public QueryRunner createQueryRunner(DataSource dataSource){
+          return new QueryRunner(dataSource);
+      }
+  
+      /**
+       * 创建数据源对象
+       * @return
+       */
+      @Bean(name = "dataSource")
+      @Scope("prototype")
+      public DataSource createDataSource(){
+          ComboPooledDataSource dataSource = new ComboPooledDataSource();
+          try {
+              dataSource.setDriverClass(driver);
+              dataSource.setJdbcUrl(url);
+              dataSource.setUser(username);
+              dataSource.setPassword(password);
+          } catch (PropertyVetoException e) {
+              throw new RuntimeException(e);
+          }
+          return dataSource;
+      }
+  }
+  
+  ```
+
+### 3. 创建jdbc配置文件
+
+- 在`resources`下创建配置文件`jdbcConfig.properties`
+
+  ```properties
+  jdbc.driver=com.mysql.cj.jdbc.Driver
+  jdbc.url=jdbc:mysql://localhost:3306/spring?serverTimezone=Asia/Shanghai
+  jdbc.username=root
+  jdbc.password=456852
+  ```
+
+### 4. 修改测试类
+
+- 将获取容器的实现类修改为`AnnotationConfigApplicationContext`
+
+  ```java
+  AbstractApplicationContext ac = new AnnotationConfigApplicationContext(SpringConfiguration.class);
   ```
 
   
