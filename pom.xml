@@ -11,6 +11,7 @@
         <module>DITest</module>
         <module>DITestAnnotation</module>
         <module>XmlIOCTest</module>
+        <module>HalfXmlIOCTest</module>
     </modules>
 
     <repositories>

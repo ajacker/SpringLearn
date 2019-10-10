@@ -1220,4 +1220,74 @@ public class BeanFactory {
   }
   ```
 
+## 二、半注解配置案例（HalfXmlIOCTest）
+
+### 1. 修改业务层
+
+- 删除`setter`方法，修改为注解形式
+
+  ```java
+  @Service("accountService")
+  public class AccountServiceImpl implements IAccountService {
+  
+      @Resource(name = "accountDao")
+      private IAccountDao accountDao;
+  
+      .....
+  
+  }
+  ```
+
+### 2. 修改持久层
+
+- 删除`setter`方法，修改为注解形式
+
+  ```java
+  /**
+   * @author ajacker
+   */
+  @Repository("accountDao")
+  public class AccountDaoImpl implements IAccountDao {
+  
+      @Resource(name = "queryRunner")
+      private QueryRunner runner;
+  
+      ....
+  
+  }
+  
+  ```
+
+### 3. 修改xml配置
+
+- 修改`xml`，添加命名空间依赖，删除可用注解代替的`bean`标签
+
+  ```xml
+  <?xml version="1.0" encoding="UTF-8"?>
+  <beans xmlns="http://www.springframework.org/schema/beans"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xmlns:context="http://www.springframework.org/schema/context"
+         xsi:schemaLocation="http://www.springframework.org/schema/beans
+          http://www.springframework.org/schema/beans/spring-beans.xsd
+          http://www.springframework.org/schema/context
+          http://www.springframework.org/schema/context/spring-context.xsd">
+  
+      <context:component-scan base-package="com.ajacker"/>
+  
+      <!--配置QueryRunner对象-->
+      <bean id="queryRunner" class="org.apache.commons.dbutils.QueryRunner" scope="prototype">
+          <!--注入数据源-->
+          <constructor-arg name="ds" ref="dataSource"/>
+      </bean>
+      <!--配置数据源-->
+      <bean id="dataSource" class="com.mchange.v2.c3p0.ComboPooledDataSource">
+          <!--连接数据库的必要信息-->
+          <property name="driverClass" value="com.mysql.cj.jdbc.Driver"/>
+          <property name="jdbcUrl" value="jdbc:mysql://localhost:3306/spring?serverTimezone=Asia/Shanghai"/>
+          <property name="user" value="root"/>
+          <property name="password" value="456852"/>
+      </bean>
+  </beans>
+  ```
+
   
