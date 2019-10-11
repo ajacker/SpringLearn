@@ -16,6 +16,8 @@
         <module>AOPTest</module>
         <module>XmlAOPTest</module>
         <module>AnnotationAOPTest</module>
+        <module>jdbcTemplateTest</module>
+        <module>jdbcTemplateDaoTest</module>
     </modules>
 
     <repositories>
@@ -31,6 +33,7 @@
             </snapshots>
         </repository>
     </repositories>
+
     <pluginRepositories>
         <pluginRepository>
             <id>alimaven spring plugin</id>
@@ -66,13 +69,5 @@
         </dependency>
     </dependencies>
 
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
-        </plugins>
-    </build>
 
 </project>

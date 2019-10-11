@@ -1954,3 +1954,214 @@ public class SpringConfiguration {
 
 - 在使用注解配置AOP时,会出现一个bug. 四个通知的调用顺序依次是:`前置通知`,`最终通知`,`后置通知`. 这会导致一些资源在执行`最终通知`时提前被释放掉了,而执行`后置通知`时就会出错.
 - 如果使用注解配置AOP，推荐使用**环绕通知**
+
+# 第三部分 JdbcTemplate
+
+`JdbcTemplate`是Spring框架中提供的一个对象,对原始的JDBC API进行简单封装,其用法与`DBUtils`类似.
+
+## A. 使用方式
+
+### 一、配置数据源
+
+```xml
+<bean id="dataSource" class="org.springframework.jdbc.datasource.DriverManagerDataSource">
+    <property name="driverClassName" value="com.mysql.cj.jdbc.Driver"/>
+    <property name="url" value="jdbc:mysql://localhost:3306/spring?serverTimezone=Asia/Shanghai&amp;useSSL=false"/>
+    <property name="username" value="root"/>
+    <property name="password" value="456852"/>
+</bean>
+```
+
+### 二、配置JdbcTemplate对象
+
+```xml
+<bean id="jdbcTemplate" class="org.springframework.jdbc.core.JdbcTemplate">
+    <property name="dataSource" ref="dataSource"/>
+</bean>
+```
+
+## B. 增删改查（jdbcTemplateTest）
+
+### 一、增加数据
+
+```java
+//插入
+jt.update("insert into account(name, money) values(?,?)","eee",3333f);
+```
+
+### 二、删除数据
+
+```java
+//删除
+jt.update("delete from account where name=?","aaa");
+```
+
+### 三、修改数据
+
+```java
+//更新
+jt.update("update account set money=? where name=?",6666f,"eee");
+```
+
+### 四、查询操作
+
+- 与`DBUtils`十分类似,`JdbcTemplate`的查询操作使用其`query()`方法,其参数如下:
+
+  - `String sql`: SQL语句
+  - `RowMapper<T> rowMapper`: 指定如何将查询结果ResultSet对象转换为T对象.
+  - `@Nullable Object... args`: SQL语句的参数
+
+- 其中`RowMapper`类类似于`DBUtils`的`ResultSetHandler`类,可以**自己写一个实现类**,但常用Spring框架内置的实现类`BeanPropertyRowMapper<T>(T.class)`(标准Bean)
+
+  - 例如：
+
+    ```java
+    /**
+     * 定义Account的封装策略
+     */
+    class AccountRowMapper implements RowMapper<Account>{
+    
+        /**
+         * 把结果集中的数据封装到Account
+         * @param resultSet
+         * @param i
+         * @return
+         * @throws SQLException
+         */
+        @Override
+        public Account mapRow(ResultSet resultSet, int i) throws SQLException {
+            Account account = new Account();
+            account.setId(resultSet.getInt("id"));
+            account.setName(resultSet.getString("name"));
+            account.setMoney(resultSet.getFloat("money"));
+            return account;
+        }
+    }
+    ```
+
+#### 1. 查询所有
+
+```java
+List<Account> accounts = jt.query("select * from account where money > ?",new BeanPropertyRowMapper<>(Account.class),100f);
+```
+
+或者采用自己实现的`RowMapper`：
+
+```java
+List<Account> accounts = jt.query("select * from account where money > ?",new AccountRowMapper(),100f);
+```
+
+#### 2. 查询一个
+
+查询一个就是查询所有的特殊情况，我们如果有且只有一个结果取第一个，否则再执行其它逻辑:
+
+```java
+List<Account> accounts = jt.query("select * from account where money = ?",new AccountRowMapper(),100f);
+Account result = accounts.isEmpty()?null:accounts.get(0);
+```
+
+#### 3. 查询聚合函数的结果（或者取某一行某一列）
+
+第二个参数指明了返回的类型：
+
+```java
+Integer i = jt.queryForObject("select count(*) from account where money > ?",Integer.class,100f);
+```
+
+## C. 在DAO层使用jdbcTemplate（jdbcTemplateDaoTest）
+
+在实际项目中,我们会创建许多`DAO`对象,若每个`DAO`对象都注入一个`JdbcTemplate`对象,会造成代码冗余.
+
+- 实际的项目中我们可以让DAO对象**继承**Spring**内置**的`JdbcDaoSupport`类.在JdbcDaoSupport类中定义了JdbcTemplate和DataSource成员属性,在实际编程中,只需要**向其注入DataSource成员**即可,DataSource的set方法中会注入JdbcTemplate对象.
+- DAO的实现类中**调用父类**的`getJdbcTemplate()`方法获得`JdbcTemplate`对象
+
+### 一、xml形式配置
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+       http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+    <!--配置数据源-->
+    <bean id="dataSource" class="org.springframework.jdbc.datasource.DriverManagerDataSource">
+        <property name="driverClassName" value="com.mysql.cj.jdbc.Driver"/>
+        <property name="url" value="jdbc:mysql://localhost:3306/spring?serverTimezone=Asia/Shanghai&amp;useSSL=false"/>
+        <property name="username" value="root"/>
+        <property name="password" value="456852"/>
+    </bean>
+    <!--注入dao对象-->
+    <bean class="com.ajacker.dao.impl.AccountDaoImpl" id="accountDao">
+        <property name="dataSource" ref="dataSource"/>
+    </bean>
+</beans>
+```
+
+### 二、半注解形式配置
+
+- 配置数据源和注解扫描支持
+
+    ```xml
+    <?xml version="1.0" encoding="UTF-8"?>
+    <beans xmlns="http://www.springframework.org/schema/beans"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xmlns:context="http://www.springframework.org/schema/context"
+           xsi:schemaLocation="http://www.springframework.org/schema/beans
+           http://www.springframework.org/schema/beans/spring-beans.xsd http://www.springframework.org/schema/context https://www.springframework.org/schema/context/spring-context.xsd">
+        <context:component-scan base-package="com.ajacker"/>
+
+        <!--配置数据源-->
+        <bean id="dataSource" class="org.springframework.jdbc.datasource.DriverManagerDataSource">
+            <property name="driverClassName" value="com.mysql.cj.jdbc.Driver"/>
+            <property name="url" value="jdbc:mysql://localhost:3306/spring?serverTimezone=Asia/Shanghai&amp;useSSL=false"/>
+            <property name="username" value="root"/>
+            <property name="password" value="456852"/>
+        </bean>
+    </beans>
+    ```
+
+- 注解持久层实现类，重写构造函数，使用注解注入参数调用父类的`setDataSource()`方法注入：
+
+  ```java
+  /**
+   * @author ajacker
+   * 持久层实现类
+   */
+  @Repository("dataSource")
+  public class AccountDaoImpl extends JdbcDaoSupport implements IAccountDao {
+  	/**
+  	 * 使用dataSource注入此参数，调用父类的set方法设置数据源
+  	 */
+      @Autowired
+      public AccountDaoImpl(DataSource dataSource) {
+          setDataSource(dataSource);
+      }
+  
+      @Override
+      public Account findAccountById(int id) {
+          List<Account> accounts = getJdbcTemplate().query("select * from account where id = ?", new BeanPropertyRowMapper<>(Account.class), id);
+          return accounts.isEmpty()?null:accounts.get(0);
+      }
+  
+      @Override
+      public Account findAccountByName(String name) {
+          List<Account> accounts = getJdbcTemplate().query("select * from account where name = ?", new BeanPropertyRowMapper<>(Account.class), name);
+          if (accounts.isEmpty()) {
+              return null;
+          }
+          if(accounts.size()>1){
+              throw new RuntimeException("结果不止一个");
+          }
+          return accounts.get(0);
+      }
+  
+      @Override
+      public void updateAccount(Account account) {
+          getJdbcTemplate().update("update account set name=?,money=? where id=?", account.getName(), account.getMoney(), account.getId());
+      }
+  }
+  
+  ```
+
+  
