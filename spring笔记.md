@@ -2250,3 +2250,225 @@ public Object aroundAdvice(ProceedingJoinPoint pjp){
 }
 ```
 
+## B. Spring事务控制支持
+
+- JavaEE 体系进行分层开发,事务处理位于业务层,Spring提供了分层设计业务层的事务处理解决方
+  案
+- Spring 框架为我们提供了一组事务控制的接口,这组接口在spring-tx-5.0.2.RELEASE.jar中
+- Spring 的事务控制都是基于AOP的,它既可以使用配置的方式实现,也可以使用编程的方式实现.推荐使用配置方式实现
+
+### 一、基础知识
+
+#### 1. 事务的四大特性（ACID）
+
+- 原子性(Atomicity): 事务包含的所有操作要么全部成功,要么全部失败回滚;成功必须要完全应用到数据库,失败则不能对数据库产生影响.
+- 一致性(Consistency):事务执行前和执行后必须处于一致性状态.例如:转账事务执行前后,两账户余额的总和不变.
+- 隔离性(Isolation): 多个并发的事务之间要相互隔离.
+- 持久性(Durability): 事务一旦提交,对数据库的改变是永久性的
+
+#### 2. 事务的隔离级别
+
+- `ISOLATION_READ_UNCOMMITTED`: 读未提交.事务中的修改,即使没有提交,其他事务也可以看得到.会导致脏读,不可重复读,幻读.
+- `ISOLATION_READ_COMMITTED`: 读已提交(Oracle数据库默认隔离级别).一个事务不会读到其它并行事务已修改但未提交的数据.避免了脏读,但会导致不可重复读,幻读.
+- `ISOLATION_REPEATABLE_READ`: 可重复读(Mysql数据库默认的隔离级别).一个事务不会读到其它并行事务已修改且已提交的数据,(只有当该事务提交之后才会看到其他事务提交的修改).避免了脏读,不可重复读,但会导致幻读.
+- `ISOLATION_SERIALIZABLE`: 串行化.事务串行执行,一个时刻只能有一个事务被执行.避免了脏读,不可重复读,幻读.
+
+---
+
+可以通过下面的例子理解事务的隔离级别: 
+
+| 事务A                             | 事务B       |
+| --------------------------------- | ----------- |
+| 启动事务 查询得到原始值`origin`=1 |             |
+|                                   | 启动事务    |
+|                                   | 查询得到值1 |
+|                                   | 将1改成2    |
+| 查询得到值`value1`                |             |
+|                                   | 提交事务B   |
+| 查询得到值`value2`                |             |
+| 提交事务A                         |             |
+| 查询得到值`value3`                |             |
+
+对不同的事务隔离级别,事务A三次查询结果分别如下:
+
+| 事务隔离级别               | 原始值`origin` | value1  | **value2**    | **value3** |
+| -------------------------- | -------------- | ------- | ------------- | ---------- |
+| ISOLATION_READ_UNCOMMITTED | 1              | 2(脏读) | 2             | 2          |
+| ISOLATION_READ_COMMITTED   | 1              | 1       | 2(不可重复读) | 2          |
+| ISOLATION_REPEATABLE_READ  | 1              | 1       | 1             | 2          |
+| ISOLATION_SERIALIZABLE     | 1              | 1       | 1             | 1          |
+
+#### 3. 事务的安全隐患
+
+1. `脏读`: 一个事务读到另外一个事务还未提交(可能被回滚)的脏数据.
+2. `不可重复读`: 一个事务执行期间另一事务提交修改,导致第一个事务前后两次查询结果不一致.
+3. `幻读`: 一个事务执行期间另一事务提交添加数据,导致第一个事务前后两次查询结果到的数据条数不同.
+
+| **脏读**                   | 脏读 | 不可重复读 | `幻读` |
+| -------------------------- | ---- | ---------- | ------ |
+| ISOLATION_READ_UNCOMMITTED | ✓    | ✓          | ✓      |
+| ISOLATION_READ_COMMITTED   | ✕    | ✓          | ✓      |
+| ISOLATION_REPEATABLE_READ  | ✕    | ✕          | ✓      |
+| ISOLATION_SERIALIZABLE     | ✕    | ✕          | ✕      |
+
+### 二、事务控制的API
+
+- `PlatformTransactionManager`接口是`Spring`提供的事务管理器,它提供了操作事务的方法如下:
+
+  - `TransactionStatus getTransaction(TransactionDefinition definition)`: 获得事务状态信息
+  - `void commit(TransactionStatus status)`: 提交事务
+  - `void rollback(TransactionStatus status)`: 回滚事务
+
+  在实际开发中我们使用其实现类:
+
+  - `org.springframework.jdbc.datasource.DataSourceTransactionManager`使用SpringJDBC或iBatis进行持久化数据时使用
+  - `org.springframework.orm.hibernate5.HibernateTransactionManager`使用Hibernate版本进行持久化数据时使用
+
+- `TransactionDefinition`: 事务定义信息对象,提供查询事务定义的方法如下:
+
+  - `String getName()`: 获取事务对象名称
+
+  - `int getIsolationLevel()`: 获取事务隔离级别,设置两个事务之间的数据可见性
+
+    事务的隔离级别由弱到强,依次有如下五种:(可以参考文章事务的四种隔离级别,数据库事务4种隔离级别及7种传播行为)
+
+    - `ISOLATION_DEFAULT`: Spring事务管理的的默认级别,使用数据库默认的事务隔离级别.
+    - `ISOLATION_READ_UNCOMMITTED`: 读未提交.
+    - `ISOLATION_READ_COMMITTED`: 读已提交.
+    - `ISOLATION_REPEATABLE_READ`: 可重复读.
+    - `ISOLATION_SERIALIZABLE`: 串行化.
+
+  - `getPropagationBehavior()`: 获取事务传播行为,设置新事务是否事务以及是否使用当前事务.
+
+    我们通常使用的是前两种: `REQUIRED`和`SUPPORTS`.事务传播行为如下:
+
+    - `REQUIRED`: Spring默认事务传播行为. 若当前没有事务,就新建一个事务;若当前已经存在一个事务中,加入到这个事务中.增删改查操作均可用
+    - `SUPPORTS`: 若当前没有事务,就不使用事务;若当前已经存在一个事务中,加入到这个事务中.查询操作可用
+    -` MANDATORY`: 使用当前的事务,若当前没有事务,就抛出异常
+    - `REQUERS_NEW`: 新建事务,若当前在事务中,把当前事务挂起
+    - `NOT_SUPPORTED`: 以非事务方式执行操作,若当前存在事务,就把当前事务挂起
+    - `NEVER`:以非事务方式运行,若当前存在事务,抛出异常
+    - `NESTED`:若当前存在事务,则在嵌套事务内执行;若当前没有事务,则执行`REQUIRED`类似的操作
+
+  - `int getTimeout()`: 获取事务超时时间. Spring默认设置事务的超时时间为-1,表示永不超时.
+
+  - `boolean isReadOnly()`: 获取事务是否只读. Spring默认设置为false,建议查询操作中设置为true
+
+- `TransactionStatus`: 事务状态信息对象,提供操作事务状态的方法如下: 
+  - `void flush()`: 刷新事务
+  - `boolean hasSavepoint()`: 查询是否存在存储点
+  - `boolean isCompleted()`: 查询事务是否完成
+  - `boolean isNewTransaction()`: 查询是否是新事务
+  - `boolean isRollbackOnly()`: 查询事务是否回滚
+  - `void setRollbackOnly()`: 设置事务回滚 
+
+## C. 使用Spring进行事务控制
+
+### 一、纯注解配置（XmlTXTest）
+
+#### 1. 配置事务管理器
+
+```xml
+<!--配置事务管理器-->
+<bean id="transactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+    <!--注入数据源-->
+    <property name="dataSource" ref="dataSource" />
+</bean>
+```
+
+#### 2. 配置事务通知和属性
+
+- 使用`<tx:advice>`标签声明事务配置,其属性如下:
+  - `id`: 事务配置的id
+  - `transaction-manager`: 该配置对应的事务管理器
+- 在`<tx:advice>`标签内包含`<tx:attributes>`标签表示配置事务属性
+
+- 在`<tx:attributes>`标签内包含`<tx:method>`标签,为切面上的方法配置事务属性,`<tx:method>`标签的属性如下:
+  - `name`: 拦截到的方法,可以使用通配符*
+  - `isolation`: 事务的隔离级别,Spring默认使用数据库的事务隔离级别
+  - `propagation`: 事务的传播行为,默认为REQUIRED.增删改方法应该用REQUIRED,查询方法可以使用SUPPORTS
+  - `read-only`: 事务是否为只读事务,默认为false.增删改方法应该用false,查询方法可以使用true
+  - `timeout`: 指定超时时间,默认值为-1,表示永不超时
+  - `rollback-for`: 指定一个异常,当发生该异常时,事务回滚;发生其他异常时,事务不回滚.无默认值,表示发生任何异常都回滚
+  - `no-rollback-for`: 指定一个异常,当发生该异常时,事务不回滚;发生其他异常时,事务回滚.无默认值,表示发生任何异常都回滚
+
+```xml
+<!--配置事务通知-->
+<tx:advice id="txAdvice" transaction-manager="transactionManager">
+    <tx:attributes>
+        <tx:method name="*" propagation="REQUIRED" read-only="false"/>
+        <tx:method name="find*" propagation="SUPPORTS" read-only="true"/>
+    </tx:attributes>
+</tx:advice>
+```
+
+#### 3. 配置aop
+
+```xml
+<!--配置aop-->
+<aop:config>
+    <!--配置切入点-->
+    <aop:pointcut id="pt" expression="execution(* com.ajacker.service.impl.*.*(..))"/>
+    <!--配置切入点表达式和通知的关系-->
+    <aop:advisor advice-ref="txAdvice" pointcut-ref="pt"/>
+</aop:config>
+```
+
+### 二、半注解配置（HalfXmlTXTest）
+
+#### 1.  配置事务管理器
+
+```xml
+<!--配置事务管理器-->
+<bean id="transactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+    <!--注入数据源-->
+    <property name="dataSource" ref="dataSource" />
+</bean>
+```
+
+#### 2. 开启注解事务支持
+
+```xml
+<!--开启事务注解支持-->
+<tx:annotation-driven transaction-manager="transactionManager"/>
+```
+
+#### 3. 在业务层注解
+
+```java
+/**
+ * @author ajacker
+ * 业务层实现类
+ */
+@Service("accountService")
+@Transactional(propagation = Propagation.SUPPORTS,readOnly = true)
+public class AccountServiceImpl implements IAccountService {
+    private final IAccountDao accountDao;
+
+    public AccountServiceImpl(IAccountDao accountDao) {
+        this.accountDao = accountDao;
+    }
+
+    public Account findAccountById(Integer accountId) {
+        return accountDao.findAccountById(accountId);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRED,readOnly = false)
+    public void transfer(String sourceName, String targetName, Float money) {
+        System.out.println("start transfer");
+        // 1.根据名称查询转出账户
+        Account source = accountDao.findAccountByName(sourceName);
+        // 2.根据名称查询转入账户
+        Account target = accountDao.findAccountByName(targetName);
+        // 3.转出账户减钱
+        source.setMoney(source.getMoney() - money);
+        // 4.转入账户加钱
+        target.setMoney(target.getMoney() + money);
+        // 5.更新转出账户
+        accountDao.updateAccount(source);
+        // 6.更新转入账户
+        accountDao.updateAccount(target);
+    }
+}
+```
+
