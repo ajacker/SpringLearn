@@ -18,6 +18,7 @@
         <module>AnnotationAOPTest</module>
         <module>jdbcTemplateTest</module>
         <module>jdbcTemplateDaoTest</module>
+        <module>AOPTxTest</module>
     </modules>
 
     <repositories>

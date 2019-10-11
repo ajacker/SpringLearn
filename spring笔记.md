@@ -2164,4 +2164,89 @@ Integer i = jt.queryForObject("select count(*) from account where money > ?",Int
   
   ```
 
-  
+# 第四部分 事务控制
+
+## A. 使用AOP完成事务控制的例子（AOPTxTest）
+
+我们基于之前的例子（AOPTest），用现在所学的知识完成改造
+
+### 一、配置Xml
+
+开启注解扫描和aop注解支持并使用`spring-jdbc`配置数据源
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:aop="http://www.springframework.org/schema/aop"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+        http://www.springframework.org/schema/beans/spring-beans.xsd
+        http://www.springframework.org/schema/context
+        http://www.springframework.org/schema/context/spring-context.xsd http://www.springframework.org/schema/aop https://www.springframework.org/schema/aop/spring-aop.xsd">
+
+    <!--配置注解扫描包-->
+    <context:component-scan base-package="com.ajacker"/>
+    <!--配置开启aop注解支持-->
+    <aop:aspectj-autoproxy proxy-target-class="true"/>
+    <!--配置QueryRunner对象-->
+    <bean id="queryRunner" class="org.apache.commons.dbutils.QueryRunner" scope="prototype"/>
+    <!--配置数据源-->
+    <bean id="dataSource" class="com.mchange.v2.c3p0.ComboPooledDataSource">
+        <!--连接数据库的必要信息-->
+        <property name="driverClass" value="com.mysql.cj.jdbc.Driver"/>
+        <property name="jdbcUrl" value="jdbc:mysql://localhost:3306/spring?serverTimezone=Asia/Shanghai"/>
+        <property name="user" value="root"/>
+        <property name="password" value="456852"/>
+    </bean>
+</beans>
+```
+
+### 二、改写TransactionManger
+
+#### 1. 配置切面
+
+```java
+@Component
+@Aspect
+public class TransactionManager {..}
+```
+
+#### 2. 添加切入点
+
+```java
+/**
+ * 配置切入点
+ */
+@Pointcut("execution(* *..AccountServiceImpl.*(..))")
+private void pt({};
+```
+
+#### 3. 配置环绕通知
+
+```java
+@Around("pt()")
+public Object aroundAdvice(ProceedingJoinPoint pjp){
+    Object rtValue;
+    try {
+        //1.获得参数
+        Object[] args = pjp.getArgs();
+        //2.开启事务
+        this.beginTransaction();
+        //3.执行方法
+        rtValue = pjp.proceed(args);
+        //4.提交事务
+        this.commit();
+        //返回结果
+        return rtValue;
+    }catch (Throwable e){
+        //5.回滚事务
+        this.rollback();
+        throw new RuntimeException(e);
+    }finally {
+        //6.释放资源
+        this.release();
+    }
+}
+```
+
